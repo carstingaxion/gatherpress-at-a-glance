@@ -1,0 +1,46 @@
+{
+    "name": "gatherpress-at-a-glance",
+    "version": "0.1.0",
+    "description": "Adds event, venue, and RSVP counts to the WordPress \"At a Glance\" dashboard widget — one row per post type for every GatherPress post-type-support group.",
+    "author": "carstenbach",
+    "license": "GPL-2.0-or-later",
+    "keywords": [
+        "gatherpress",
+        "theater-groups",
+        "wordpress"
+    ],
+    "homepage": "https://github.com/carstingaxion/gatherpress-at-a-glance#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/carstingaxion/gatherpress-at-a-glance.git"
+    },
+    "bugs": {
+        "url": "https://github.com/carstingaxion/gatherpress-at-a-glance/issues"
+    },
+    "devDependencies": {
+        "@wordpress/scripts": "^32.6.0"
+    },
+    "scripts": {
+        "build": "# Build the plugin for production",
+        "check-engines": "wp-scripts check-engines",
+        "check-licenses": "wp-scripts check-licenses",
+        "format": "wp-scripts format",
+        "i18n:pot": " wp i18n make-pot . --exclude=node_modules,vendor,build",
+        "i18n:json": "wp i18n make-json languages --no-purge",
+        "i18n:php": "wp i18n make-php languages",
+        "lint:css": "wp-scripts lint-style",
+        "lint:css:fix": "wp-scripts lint-style --fix",
+        "lint:js": "wp-scripts lint-js",
+        "lint:js:fix": "wp-scripts lint-js --fix",
+        "lint:md:docs": "wp-scripts lint-md-docs",
+        "lint:md:docs:fix": "wp-scripts lint-md-docs --fix",
+        "lint:md:js": "wp-scripts lint-md-js",
+        "lint:php": "vendor/bin/phpcs --standard=.phpcs.xml --extensions=php --colors -s -p -v .",
+        "lint:php:fix": "vendor/bin/phpcbf --standard=.phpcs.xml -p -v .",
+        "lint:phpstan": "vendor/bin/phpstan analyze -vv --memory-limit=2G",
+        "lint:pkg-json": "wp-scripts lint-pkg-json",
+        "packages-update": "wp-scripts packages-update",
+        "plugin-zip": "wp-scripts plugin-zip",
+        "start": "wp-scripts start --blocks-manifest"
+    }
+}
