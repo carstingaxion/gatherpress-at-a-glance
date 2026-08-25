@@ -12,6 +12,8 @@ namespace GatherPress_At_A_Glance;
 use GatherPress\Core;
 use GatherPress\Core\Rsvp\Query as Rsvp_Query;
 use GatherPress\Core\Rsvp;
+use GatherPress\Core\Rsvp\Response\Status;
+
 
 /**
  * Hooks into `dashboard_glance_items` and appends one line per post type
@@ -464,7 +466,7 @@ class Dashboard {
 	 * @return void
 	 */
 	public function invalidate_on_rsvp_terms( int $object_id, array $terms, array $tt_ids, string $taxonomy ): void {
-		if ( Rsvp::TAXONOMY !== $taxonomy ) {
+		if ( Status::TAXONOMY !== $taxonomy ) {
 			return;
 		}
 
@@ -792,7 +794,7 @@ class Dashboard {
 				'post_type' => $post_type,
 				'tax_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
 					array(
-						'taxonomy' => Rsvp::TAXONOMY,
+						'taxonomy' => Status::TAXONOMY,
 						'field'    => 'slug',
 						'terms'    => array( $status_slug ),
 					),
