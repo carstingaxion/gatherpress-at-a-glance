@@ -1,6 +1,6 @@
 {
     "name": "gatherpress-at-a-glance",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Adds event, venue, and RSVP counts to the WordPress \"At a Glance\" dashboard widget — one row per post type for every GatherPress post-type-support group.",
     "author": "carstenbach",
     "license": "GPL-2.0-or-later",
