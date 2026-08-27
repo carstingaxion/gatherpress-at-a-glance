@@ -11,7 +11,7 @@ namespace GatherPress_At_A_Glance;
 
 use GatherPress\Core;
 use GatherPress\Core\Rsvp\Query;
-use GatherPress\Core\Rsvp;
+use GatherPress\Core\Rsvp\Rsvp;
 use GatherPress\Core\Rsvp\Response\Status;
 use WP_Comment;
 use WP_Post;
@@ -463,10 +463,10 @@ class Dashboard {
 	 *
 	 * @since 0.1.0
 	 *
-	 * @param int    $object_id  Object ID (comment ID for RSVPs).
-	 * @param array  $terms      Array of term IDs/slugs being set.
-	 * @param array  $tt_ids     Array of term taxonomy IDs.
-	 * @param string $taxonomy   Taxonomy slug.
+	 * @param int                $object_id  Object ID (comment ID for RSVPs).
+	 * @param array<int|string>  $terms      Array of term IDs/slugs being set.
+	 * @param int[]              $tt_ids     Array of term taxonomy IDs.
+	 * @param string             $taxonomy   Taxonomy slug.
 	 * @return void
 	 */
 	public function invalidate_on_rsvp_terms( int $object_id, array $terms, array $tt_ids, string $taxonomy ): void {
@@ -511,7 +511,12 @@ class Dashboard {
 	 */
 	protected function event_date_items( string $post_type ): array {
 		$pt_obj = get_post_type_object( $post_type );
-		if ( ! $pt_obj ) {
+		if (
+			! $pt_obj ||
+			! is_string( $pt_obj->cap->edit_posts ) ||
+			! is_string( $pt_obj->labels->name ) ||
+			! is_string( $pt_obj->labels->singular_name )
+		) {
 			return array();
 		}
 
@@ -620,12 +625,17 @@ class Dashboard {
 	 */
 	protected function venue_item( string $post_type ): string {
 		$pt_obj = get_post_type_object( $post_type );
-		if ( ! $pt_obj ) {
+		if (
+			! $pt_obj ||
+			! is_string( $pt_obj->cap->edit_posts ) ||
+			! is_string( $pt_obj->labels->name ) ||
+			! is_string( $pt_obj->labels->singular_name )
+		) {
 			return '';
 		}
 
 		$counts    = wp_count_posts( $post_type );
-		$count     = (int) ( $counts->publish ?? 0 );
+		$count     = is_int( $counts->publish ) ? $counts->publish : 0;
 		$can_edit  = current_user_can( $pt_obj->cap->edit_posts );
 		$css_class = 'gp-glance-' . sanitize_html_class( $post_type );
 
@@ -664,7 +674,10 @@ class Dashboard {
 	 */
 	protected function rsvp_items( string $post_type ): array {
 		$pt_obj = get_post_type_object( $post_type );
-		if ( ! $pt_obj ) {
+		if (
+			! $pt_obj ||
+			! is_string( $pt_obj->labels->singular_name )
+		) {
 			return array();
 		}
 
@@ -749,9 +762,15 @@ class Dashboard {
 			)
 		);
 
-		$this->set_cached_count( $transient_key, (int) $count );
+		/**
+		 * Rsvp\Query::get_rsvps() returns an Array of RSVP comments
+		 * or integer count when count parameter is true.
+		 * 
+		 * @var int $count
+		 */
+		$this->set_cached_count( $transient_key, $count );
 
-		return (int) $count;
+		return $count;
 	}
 
 	// -------------------------------------------------------------------------
