@@ -26,7 +26,8 @@
         "source": "https://github.com/carstingaxion/gatherpress-at-a-glance"
     },
     "require-dev": {
-        "figuren-theater/code-quality": "*"
+        "figuren-theater/code-quality": "*",
+        "wpackagist-plugin/gatherpress": "^0.35.2"
     },
     "repositories": [
         {

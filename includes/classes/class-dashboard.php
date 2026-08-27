@@ -10,8 +10,13 @@ declare(strict_types=1);
 namespace GatherPress_At_A_Glance;
 
 use GatherPress\Core;
-use GatherPress\Core\Rsvp\Query as Rsvp_Query;
-use GatherPress\Core\Rsvp;
+use GatherPress\Core\Rsvp\Query;
+use GatherPress\Core\Rsvp\Rsvp;
+use GatherPress\Core\Rsvp\Response\Status;
+use WP_Comment;
+use WP_Post;
+use WP_Query;
+
 
 /**
  * Hooks into `dashboard_glance_items` and appends one line per post type
@@ -185,14 +190,14 @@ class Dashboard {
 		// Posts and pages: WP skips the <li> entirely when publish count is 0.
 		foreach ( array( 'post', 'page' ) as $post_type ) {
 			$counts = wp_count_posts( $post_type );
-			if ( $counts && $counts->publish ) {
+			if ( $counts->publish ) {
 				++$count;
 			}
 		}
 
 		// Comments: WP only prints both items when approved > 0 OR moderated > 0.
 		$num_comm = wp_count_comments();
-		if ( $num_comm && ( $num_comm->approved || $num_comm->moderated ) ) {
+		if ( $num_comm->approved || $num_comm->moderated ) {
 			++$count; // comment-count <li> — always visible when this block runs.
 
 			// comment-mod-count <li> gets class="hidden" (display:none) when
@@ -341,16 +346,17 @@ class Dashboard {
 	protected function get_cached_count( string $transient_key ) {
 		// 1. Object cache (within-request or persistent backend).
 		$cached = wp_cache_get( $transient_key, self::CACHE_GROUP );
-		if ( false !== $cached ) {
-			return (int) $cached;
+		if ( false !== $cached && is_int( $cached ) ) {
+			return $cached;
 		}
 
 		// 2. Transient (wp_options, survives request boundaries).
 		$cached = get_transient( $transient_key );
-		if ( false !== $cached ) {
+		if ( false !== $cached && is_int( $cached ) ) {
+			// $cached = is_int( $cached ) ? $cached : 0;
 			// Backfill the object cache so the next call in this request is free.
-			wp_cache_set( $transient_key, (int) $cached, self::CACHE_GROUP, self::TRANSIENT_TTL ); // phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined
-			return (int) $cached;
+			wp_cache_set( $transient_key, $cached, self::CACHE_GROUP, self::TRANSIENT_TTL ); // phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined
+			return $cached;
 		}
 
 		return false;
@@ -428,12 +434,12 @@ class Dashboard {
 	 *
 	 * @since 0.1.0
 	 *
-	 * @param string   $new_status New post status.
-	 * @param string   $old_status Old post status.
-	 * @param \WP_Post $post       Post object.
+	 * @param string  $new_status New post status.
+	 * @param string  $old_status Old post status.
+	 * @param WP_Post $post       Post object.
 	 * @return void
 	 */
-	public function invalidate_on_post_change( string $new_status, string $old_status, \WP_Post $post ): void {
+	public function invalidate_on_post_change( string $new_status, string $old_status, WP_Post $post ): void {
 		if ( $new_status === $old_status ) {
 			return;
 		}
@@ -457,14 +463,14 @@ class Dashboard {
 	 *
 	 * @since 0.1.0
 	 *
-	 * @param int    $object_id  Object ID (comment ID for RSVPs).
-	 * @param array  $terms      Array of term IDs/slugs being set.
-	 * @param array  $tt_ids     Array of term taxonomy IDs.
-	 * @param string $taxonomy   Taxonomy slug.
+	 * @param int               $object_id  Object ID (comment ID for RSVPs).
+	 * @param array<int|string> $terms      Array of term IDs/slugs being set.
+	 * @param int[]             $tt_ids     Array of term taxonomy IDs.
+	 * @param string            $taxonomy   Taxonomy slug.
 	 * @return void
 	 */
 	public function invalidate_on_rsvp_terms( int $object_id, array $terms, array $tt_ids, string $taxonomy ): void {
-		if ( Rsvp::TAXONOMY !== $taxonomy ) {
+		if ( Status::TAXONOMY !== $taxonomy ) {
 			return;
 		}
 
@@ -479,11 +485,11 @@ class Dashboard {
 	 *
 	 * @since 0.1.0
 	 *
-	 * @param int         $comment_id The deleted comment ID.
-	 * @param \WP_Comment $comment    The deleted comment object.
+	 * @param int        $comment_id The deleted comment ID.
+	 * @param WP_Comment $comment    The deleted comment object.
 	 * @return void
 	 */
-	public function invalidate_on_rsvp_delete( int $comment_id, \WP_Comment $comment ): void {
+	public function invalidate_on_rsvp_delete( int $comment_id, WP_Comment $comment ): void {
 		if ( Rsvp::COMMENT_TYPE !== $comment->comment_type ) {
 			return;
 		}
@@ -505,7 +511,12 @@ class Dashboard {
 	 */
 	protected function event_date_items( string $post_type ): array {
 		$pt_obj = get_post_type_object( $post_type );
-		if ( ! $pt_obj ) {
+		if (
+			! $pt_obj ||
+			! is_string( $pt_obj->cap->edit_posts ) ||
+			! is_string( $pt_obj->labels->name ) ||
+			! is_string( $pt_obj->labels->singular_name )
+		) {
 			return array();
 		}
 
@@ -519,39 +530,43 @@ class Dashboard {
 		$plural   = $pt_obj->labels->name;
 		$singular = $pt_obj->labels->singular_name;
 
+		$past_text = sprintf(
+			/* translators: 1: count, 2: post type label (singular or plural, matching the count) */
+			_n(
+				'%1$d Past %2$s',
+				'%1$d Past %2$s',
+				$past_count,
+				'gatherpress-at-a-glance'
+			),
+			number_format_i18n( $past_count ),
+			1 === $past_count ? $singular : $plural
+		);
+
+		$upcoming_text = sprintf(
+			/* translators: 1: count, 2: post type label (singular or plural, matching the count) */
+			_n(
+				'%1$d Upcoming %2$s',
+				'%1$d Upcoming %2$s',
+				$upcoming_count,
+				'gatherpress-at-a-glance'
+			),
+			number_format_i18n( $upcoming_count ),
+			1 === $upcoming_count ? $singular : $plural
+		);
+
 		return array(
 			$this->make_item(
-				$past_count,
-				/* translators: 1: count, 2: singular post type label, 3: plural post type label */
-				_n(
-					'%1$d Past %2$s',
-					'%1$d Past %3$s',
-					$past_count,
-					'gatherpress-at-a-glance'
-				),
-				$singular,
-				$plural,
+				$past_text,
 				$can_edit
 					? add_query_arg( 'gatherpress_event_query', 'past', $base_url )
 					: null,
-				false,
 				$css_class
 			),
 			$this->make_item(
-				$upcoming_count,
-				/* translators: 1: count, 2: singular post type label, 3: plural post type label */
-				_n(
-					'%1$d Upcoming %2$s',
-					'%1$d Upcoming %3$s',
-					$upcoming_count,
-					'gatherpress-at-a-glance'
-				),
-				$singular,
-				$plural,
+				$upcoming_text,
 				$can_edit
 					? add_query_arg( 'gatherpress_event_query', 'upcoming', $base_url )
 					: null,
-				false,
 				$css_class
 			),
 		);
@@ -577,7 +592,7 @@ class Dashboard {
 			return $cached;
 		}
 
-		$query = new \WP_Query(
+		$query = new WP_Query(
 			array(
 				'post_type'               => $post_type,
 				'post_status'             => 'publish',
@@ -610,88 +625,40 @@ class Dashboard {
 	 */
 	protected function venue_item( string $post_type ): string {
 		$pt_obj = get_post_type_object( $post_type );
-		if ( ! $pt_obj ) {
+		if (
+			! $pt_obj ||
+			! is_string( $pt_obj->cap->edit_posts ) ||
+			! is_string( $pt_obj->labels->name ) ||
+			! is_string( $pt_obj->labels->singular_name )
+		) {
 			return '';
 		}
 
 		$counts    = wp_count_posts( $post_type );
-		$count     = (int) ( $counts->publish ?? 0 );
+		$count     = is_numeric( $counts->publish ) ? (int) $counts->publish : 0;
 		$can_edit  = current_user_can( $pt_obj->cap->edit_posts );
 		$css_class = 'gp-glance-' . sanitize_html_class( $post_type );
 
-		return $this->make_item(
-			$count,
-			/* translators: 1: count, 2: singular post type label, 3: plural post type label */
+		$text = sprintf(
+			/* translators: 1: count, 2: post type label (singular or plural, matching the count) */
 			_n(
 				'%1$d %2$s',
-				'%1$d %3$s',
+				'%1$d %2$s',
 				$count,
 				'gatherpress-at-a-glance'
 			),
-			$pt_obj->labels->singular_name,
-			$pt_obj->labels->name,
+			number_format_i18n( $count ),
+			1 === $count ? $pt_obj->labels->singular_name : $pt_obj->labels->name
+		);
+
+		return $this->make_item(
+			$text,
 			$can_edit
 				? admin_url( sprintf( 'edit.php?post_type=%s', $post_type ) )
 				: null,
-			false,
 			$css_class
 		);
 	}
-
-	// -------------------------------------------------------------------------
-	// Topic item
-	// -------------------------------------------------------------------------
-
-	/**
-	 * Build a term-count glance item for the GatherPress topic taxonomy.
-	 *
-	 * Returns null when the taxonomy is not registered (GatherPress not active
-	 * or core changed the slug).
-	 *
-	 * TODO: Decide on a suitable dashicon for topics and uncomment this method
-	 *       along with its call-site in add_glance_items().
-	 *
-	 * @since 0.1.0
-	 *
-	 * @return string|null HTML string, or null when unavailable.
-	 */
-	/*
-	protected function topic_item(): ?string {
-		$taxonomy = 'gatherpress_topic';
-
-		if ( ! taxonomy_exists( $taxonomy ) ) {
-			return null;
-		}
-
-		$tax_obj = get_taxonomy( $taxonomy );
-		$count   = (int) wp_count_terms( array( 'taxonomy' => $taxonomy, 'hide_empty' => false ) );
-
-		// Topics are managed under the event post type admin screen.
-		$can_manage = $tax_obj && current_user_can( $tax_obj->cap->manage_terms );
-		$url        = $can_manage
-			? admin_url( 'edit-tags.php?taxonomy=' . $taxonomy . '&post_type=gatherpress_event' )
-			: null;
-
-		$singular = $tax_obj ? $tax_obj->labels->singular_name : __( 'Topic', 'gatherpress-at-a-glance' );
-		$plural   = $tax_obj ? $tax_obj->labels->name           : __( 'Topics', 'gatherpress-at-a-glance' );
-
-		return $this->make_item(
-			$count,
-			// translators: 1: count, 2: singular taxonomy label, 3: plural taxonomy label
-			_n(
-				'%1$d %2$s',
-				'%1$d %3$s',
-				$count,
-				'gatherpress-at-a-glance'
-			),
-			$singular,
-			$plural,
-			$url,
-			false,
-			'gp-glance-topic'
-		);
-	}
-	*/
 
 	// -------------------------------------------------------------------------
 	// RSVP items
@@ -707,7 +674,10 @@ class Dashboard {
 	 */
 	protected function rsvp_items( string $post_type ): array {
 		$pt_obj = get_post_type_object( $post_type );
-		if ( ! $pt_obj ) {
+		if (
+			! $pt_obj ||
+			! is_string( $pt_obj->labels->singular_name )
+		) {
 			return array();
 		}
 
@@ -724,9 +694,8 @@ class Dashboard {
 
 		return array(
 			$this->make_item(
-				$attending,
-				/* translators: 1: count, 2: singular post type label */
 				sprintf(
+					/* translators: 1: count, 2: singular post type label */
 					_n(
 						'%1$d Attending RSVP (%2$s)',
 						'%1$d Attending RSVPs (%2$s)',
@@ -736,16 +705,12 @@ class Dashboard {
 					number_format_i18n( $attending ),
 					$pt_singular
 				),
-				'',
-				'',
 				$rsvp_url,
-				true,
 				$css_class
 			),
 			$this->make_item(
-				$waiting_list,
-				/* translators: 1: count, 2: singular post type label */
 				sprintf(
+					/* translators: 1: count, 2: singular post type label */
 					_n(
 						'%1$d on Waiting List (%2$s)',
 						'%1$d on Waiting List (%2$s)',
@@ -755,10 +720,7 @@ class Dashboard {
 					number_format_i18n( $waiting_list ),
 					$pt_singular
 				),
-				'',
-				'',
 				$rsvp_url,
-				true,
 				$css_class
 			),
 		);
@@ -784,7 +746,7 @@ class Dashboard {
 			return $cached;
 		}
 
-		$rsvp_query = Rsvp_Query::get_instance();
+		$rsvp_query = Query::get_instance();
 		$count      = $rsvp_query->get_rsvps(
 			array(
 				'count'     => true,
@@ -792,7 +754,7 @@ class Dashboard {
 				'post_type' => $post_type,
 				'tax_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
 					array(
-						'taxonomy' => Rsvp::TAXONOMY,
+						'taxonomy' => Status::TAXONOMY,
 						'field'    => 'slug',
 						'terms'    => array( $status_slug ),
 					),
@@ -800,9 +762,15 @@ class Dashboard {
 			)
 		);
 
-		$this->set_cached_count( $transient_key, (int) $count );
+		/**
+		 * Rsvp\Query::get_rsvps() returns an Array of RSVP comments
+		 * or integer count when count parameter is true.
+		 * 
+		 * @var int $count
+		 */
+		$this->set_cached_count( $transient_key, $count );
 
-		return (int) $count;
+		return $count;
 	}
 
 	// -------------------------------------------------------------------------
@@ -820,34 +788,21 @@ class Dashboard {
 	 * is wrapped in a <span> so WordPress styles it identically but without
 	 * an interactive link.
 	 *
-	 * When $pre_formatted is true, $label is used verbatim as the link/span
-	 * text (the caller has already run number_format_i18n and sprintf).
-	 * When false, $label is treated as a format string with three positional
-	 * placeholders: %1$d = count, %2$s = singular label, %3$s = plural label.
+	 * $text must already be the final, fully formatted string — callers are
+	 * responsible for running number_format_i18n()/sprintf() themselves before
+	 * calling this method. Keeping formatting at the call site means each
+	 * caller's translator string can use as many or as few placeholders as it
+	 * actually needs, instead of being constrained to a fixed template shared
+	 * by every caller.
 	 *
 	 * @since 0.1.0
 	 *
-	 * @param int         $count         Raw integer count.
-	 * @param string      $label         Format string or pre-formatted text.
-	 * @param string      $singular      Singular label for %2$s.
-	 * @param string      $plural        Plural label for %3$s.
-	 * @param string|null $url           Admin URL, or null to render unlinked.
-	 * @param bool        $pre_formatted Whether $label is already the final string.
-	 * @param string      $css_class     CSS class placed on the <a>/<span> for icon targeting.
+	 * @param string      $text      Final, already-formatted link/span text.
+	 * @param string|null $url       Admin URL, or null to render unlinked.
+	 * @param string      $css_class CSS class placed on the <a>/<span> for icon targeting.
 	 * @return string HTML string.
 	 */
-	protected function make_item(
-		int $count,
-		string $label,
-		string $singular,
-		string $plural,
-		?string $url,
-		bool $pre_formatted = false,
-		string $css_class = ''
-	): string {
-		$text       = $pre_formatted
-			? $label
-			: sprintf( $label, number_format_i18n( $count ), $singular, $plural );
+	protected function make_item( string $text, ?string $url, string $css_class = '' ): string {
 		$class_attr = $css_class ? sprintf( ' class="%s"', esc_attr( $css_class ) ) : '';
 
 		if ( null !== $url ) {
