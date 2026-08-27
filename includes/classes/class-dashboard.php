@@ -10,11 +10,12 @@ declare(strict_types=1);
 namespace GatherPress_At_A_Glance;
 
 use GatherPress\Core;
-use GatherPress\Core\Rsvp\Query as Rsvp_Query;
+use GatherPress\Core\Rsvp\Query;
 use GatherPress\Core\Rsvp;
 use GatherPress\Core\Rsvp\Response\Status;
 use WP_Comment;
 use WP_Post;
+use WP_Query;
 
 
 /**
@@ -524,39 +525,43 @@ class Dashboard {
 		$plural   = $pt_obj->labels->name;
 		$singular = $pt_obj->labels->singular_name;
 
+		$past_text = sprintf(
+			/* translators: 1: count, 2: post type label (singular or plural, matching the count) */
+			_n(
+				'%1$d Past %2$s',
+				'%1$d Past %2$s',
+				$past_count,
+				'gatherpress-at-a-glance'
+			),
+			number_format_i18n( $past_count ),
+			1 === $past_count ? $singular : $plural
+		);
+
+		$upcoming_text = sprintf(
+			/* translators: 1: count, 2: post type label (singular or plural, matching the count) */
+			_n(
+				'%1$d Upcoming %2$s',
+				'%1$d Upcoming %2$s',
+				$upcoming_count,
+				'gatherpress-at-a-glance'
+			),
+			number_format_i18n( $upcoming_count ),
+			1 === $upcoming_count ? $singular : $plural
+		);
+
 		return array(
 			$this->make_item(
-				$past_count,
-				/* translators: 1: count, 2: singular post type label, 3: plural post type label */
-				_n(
-					'%1$d Past %2$s',
-					'%1$d Past %3$s',
-					$past_count,
-					'gatherpress-at-a-glance'
-				),
-				$singular,
-				$plural,
+				$past_text,
 				$can_edit
 					? add_query_arg( 'gatherpress_event_query', 'past', $base_url )
 					: null,
-				false,
 				$css_class
 			),
 			$this->make_item(
-				$upcoming_count,
-				/* translators: %1$s: count, %2$s: singular post type label, %4$s: count , %3$s: plural post type label*/
-				_n(
-					'%1$s Upcoming %2$s',
-					'%4$s Upcoming %3$s',
-					$upcoming_count,
-					'gatherpress-at-a-glance'
-				),
-				$singular,
-				$plural,
+				$upcoming_text,
 				$can_edit
 					? add_query_arg( 'gatherpress_event_query', 'upcoming', $base_url )
 					: null,
-				false,
 				$css_class
 			),
 		);
@@ -582,7 +587,7 @@ class Dashboard {
 			return $cached;
 		}
 
-		$query = new \WP_Query(
+		$query = new WP_Query(
 			array(
 				'post_type'               => $post_type,
 				'post_status'             => 'publish',
@@ -624,21 +629,23 @@ class Dashboard {
 		$can_edit  = current_user_can( $pt_obj->cap->edit_posts );
 		$css_class = 'gp-glance-' . sanitize_html_class( $post_type );
 
-		return $this->make_item(
-			$count,
-			/* translators: 1: count, 2: singular post type label, 3: plural post type label */
+		$text = sprintf(
+			/* translators: 1: count, 2: post type label (singular or plural, matching the count) */
 			_n(
 				'%1$d %2$s',
-				'%1$d %3$s',
+				'%1$d %2$s',
 				$count,
 				'gatherpress-at-a-glance'
 			),
-			$pt_obj->labels->singular_name,
-			$pt_obj->labels->name,
+			number_format_i18n( $count ),
+			1 === $count ? $pt_obj->labels->singular_name : $pt_obj->labels->name
+		);
+
+		return $this->make_item(
+			$text,
 			$can_edit
 				? admin_url( sprintf( 'edit.php?post_type=%s', $post_type ) )
 				: null,
-			false,
 			$css_class
 		);
 	}
@@ -674,7 +681,6 @@ class Dashboard {
 
 		return array(
 			$this->make_item(
-				$attending,
 				sprintf(
 					/* translators: 1: count, 2: singular post type label */
 					_n(
@@ -686,14 +692,10 @@ class Dashboard {
 					number_format_i18n( $attending ),
 					$pt_singular
 				),
-				'',
-				'',
 				$rsvp_url,
-				true,
 				$css_class
 			),
 			$this->make_item(
-				$waiting_list,
 				sprintf(
 					/* translators: 1: count, 2: singular post type label */
 					_n(
@@ -705,10 +707,7 @@ class Dashboard {
 					number_format_i18n( $waiting_list ),
 					$pt_singular
 				),
-				'',
-				'',
 				$rsvp_url,
-				true,
 				$css_class
 			),
 		);
@@ -734,7 +733,7 @@ class Dashboard {
 			return $cached;
 		}
 
-		$rsvp_query = Rsvp_Query::get_instance();
+		$rsvp_query = Query::get_instance();
 		$count      = $rsvp_query->get_rsvps(
 			array(
 				'count'     => true,
@@ -770,34 +769,21 @@ class Dashboard {
 	 * is wrapped in a <span> so WordPress styles it identically but without
 	 * an interactive link.
 	 *
-	 * When $pre_formatted is true, $label is used verbatim as the link/span
-	 * text (the caller has already run number_format_i18n and sprintf).
-	 * When false, $label is treated as a format string with three positional
-	 * placeholders: %1$d = count, %2$s = singular label, %3$s = plural label.
+	 * $text must already be the final, fully formatted string — callers are
+	 * responsible for running number_format_i18n()/sprintf() themselves before
+	 * calling this method. Keeping formatting at the call site means each
+	 * caller's translator string can use as many or as few placeholders as it
+	 * actually needs, instead of being constrained to a fixed template shared
+	 * by every caller.
 	 *
 	 * @since 0.1.0
 	 *
-	 * @param int         $count         Raw integer count.
-	 * @param string      $label         Format string or pre-formatted text.
-	 * @param string      $singular      Singular label for %2$s.
-	 * @param string      $plural        Plural label for %3$s.
-	 * @param string|null $url           Admin URL, or null to render unlinked.
-	 * @param bool        $pre_formatted Whether $label is already the final string.
-	 * @param string      $css_class     CSS class placed on the <a>/<span> for icon targeting.
+	 * @param string      $text      Final, already-formatted link/span text.
+	 * @param string|null $url       Admin URL, or null to render unlinked.
+	 * @param string      $css_class CSS class placed on the <a>/<span> for icon targeting.
 	 * @return string HTML string.
 	 */
-	protected function make_item(
-		int $count,
-		string $label,
-		string $singular,
-		string $plural,
-		?string $url,
-		bool $pre_formatted = false,
-		string $css_class = ''
-	): string {
-		$text       = $pre_formatted
-			? $label
-			: sprintf( $label, number_format_i18n( $count ), $singular, $plural );
+	protected function make_item( string $text, ?string $url, string $css_class = '' ): string {
 		$class_attr = $css_class ? sprintf( ' class="%s"', esc_attr( $css_class ) ) : '';
 
 		if ( null !== $url ) {
