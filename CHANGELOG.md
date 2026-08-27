@@ -2,7 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased](https://github.com/carstingaxion/gatherpress-at-a-glance/compare/0.1.0...HEAD)
+## [Unreleased](https://github.com/carstingaxion/gatherpress-at-a-glance/compare/0.1.1...HEAD)
+
+## [0.1.1](https://github.com/carstingaxion/gatherpress-at-a-glance/compare/0.1.0...0.1.1) - 2026-08-27
+
+### Fixed
+
+- Fix class names due to GatherPress 0.35.0 changes ([#11](https://github.com/carstingaxion/gatherpress-at-a-glance/pull/11))
+
+### Dependency Updates & Maintenance
+
+- Update wp-scripts ([#12](https://github.com/carstingaxion/gatherpress-at-a-glance/pull/12))
+- Updated requirements to WP 7.0 and GatherPress 0.35.2
 
 ## [0.1.0](https://github.com/carstingaxion/gatherpress-at-a-glance/compare/0.1.0...0.1.0) - 2026-07-07
 
