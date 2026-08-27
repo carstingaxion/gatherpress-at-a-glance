@@ -37,9 +37,9 @@ Each count links to the relevant admin screen when the current user has the requ
 
 ## Requirements
 
-- WordPress 6.4 or later
+- WordPress 7.0 or later
 - PHP 7.4 or later
-- [GatherPress](https://gatherpress.org/) 0.34.0-alpha-2 or later
+- [GatherPress](https://gatherpress.org/) 0.35.2 or later
 
 ## Installation
 

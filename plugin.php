@@ -4,7 +4,7 @@
  * Plugin URI:        https://github.com/carstingaxion/gatherpress-at-a-glance
  * Description:       Adds event, venue, and RSVP counts to the WordPress "At a Glance" dashboard widget.
  * Version:           0.1.0
- * Requires at least: 6.0
+ * Requires at least: 7.0
  * Requires PHP:      7.4
  * Requires plugins:  gatherpress
  * Author:            carstenbach
