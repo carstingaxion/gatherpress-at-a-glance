@@ -346,14 +346,14 @@ class Dashboard {
 	protected function get_cached_count( string $transient_key ) {
 		// 1. Object cache (within-request or persistent backend).
 		$cached = wp_cache_get( $transient_key, self::CACHE_GROUP );
-		if ( false !== $cached ) {
-			return is_int( $cached ) ? $cached : 0;
+		if ( false !== $cached && is_int( $cached ) ) {
+			return $cached;
 		}
 
 		// 2. Transient (wp_options, survives request boundaries).
 		$cached = get_transient( $transient_key );
-		if ( false !== $cached ) {
-			$cached = is_int( $cached ) ? $cached : 0;
+		if ( false !== $cached && is_int( $cached ) ) {
+			// $cached = is_int( $cached ) ? $cached : 0;
 			// Backfill the object cache so the next call in this request is free.
 			wp_cache_set( $transient_key, $cached, self::CACHE_GROUP, self::TRANSIENT_TTL ); // phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined
 			return $cached;
@@ -463,10 +463,10 @@ class Dashboard {
 	 *
 	 * @since 0.1.0
 	 *
-	 * @param int                $object_id  Object ID (comment ID for RSVPs).
-	 * @param array<int|string>  $terms      Array of term IDs/slugs being set.
-	 * @param int[]              $tt_ids     Array of term taxonomy IDs.
-	 * @param string             $taxonomy   Taxonomy slug.
+	 * @param int               $object_id  Object ID (comment ID for RSVPs).
+	 * @param array<int|string> $terms      Array of term IDs/slugs being set.
+	 * @param int[]             $tt_ids     Array of term taxonomy IDs.
+	 * @param string            $taxonomy   Taxonomy slug.
 	 * @return void
 	 */
 	public function invalidate_on_rsvp_terms( int $object_id, array $terms, array $tt_ids, string $taxonomy ): void {
@@ -635,7 +635,7 @@ class Dashboard {
 		}
 
 		$counts    = wp_count_posts( $post_type );
-		$count     = is_int( $counts->publish ) ? $counts->publish : 0;
+		$count     = is_numeric( $counts->publish ) ? (int) $counts->publish : 0;
 		$can_edit  = current_user_can( $pt_obj->cap->edit_posts );
 		$css_class = 'gp-glance-' . sanitize_html_class( $post_type );
 
