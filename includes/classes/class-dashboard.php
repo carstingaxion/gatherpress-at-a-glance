@@ -13,6 +13,8 @@ use GatherPress\Core;
 use GatherPress\Core\Rsvp\Query as Rsvp_Query;
 use GatherPress\Core\Rsvp;
 use GatherPress\Core\Rsvp\Response\Status;
+use WP_Comment;
+use WP_Post;
 
 
 /**
@@ -187,14 +189,14 @@ class Dashboard {
 		// Posts and pages: WP skips the <li> entirely when publish count is 0.
 		foreach ( array( 'post', 'page' ) as $post_type ) {
 			$counts = wp_count_posts( $post_type );
-			if ( $counts && $counts->publish ) {
+			if ( $counts->publish ) {
 				++$count;
 			}
 		}
 
 		// Comments: WP only prints both items when approved > 0 OR moderated > 0.
 		$num_comm = wp_count_comments();
-		if ( $num_comm && ( $num_comm->approved || $num_comm->moderated ) ) {
+		if ( $num_comm->approved || $num_comm->moderated ) {
 			++$count; // comment-count <li> — always visible when this block runs.
 
 			// comment-mod-count <li> gets class="hidden" (display:none) when
@@ -344,15 +346,16 @@ class Dashboard {
 		// 1. Object cache (within-request or persistent backend).
 		$cached = wp_cache_get( $transient_key, self::CACHE_GROUP );
 		if ( false !== $cached ) {
-			return (int) $cached;
+			return is_int( $cached ) ? $cached : 0;
 		}
 
 		// 2. Transient (wp_options, survives request boundaries).
 		$cached = get_transient( $transient_key );
 		if ( false !== $cached ) {
+			$cached = is_int( $cached ) ? $cached : 0;
 			// Backfill the object cache so the next call in this request is free.
-			wp_cache_set( $transient_key, (int) $cached, self::CACHE_GROUP, self::TRANSIENT_TTL ); // phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined
-			return (int) $cached;
+			wp_cache_set( $transient_key, $cached, self::CACHE_GROUP, self::TRANSIENT_TTL ); // phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined
+			return $cached;
 		}
 
 		return false;
@@ -430,12 +433,12 @@ class Dashboard {
 	 *
 	 * @since 0.1.0
 	 *
-	 * @param string   $new_status New post status.
-	 * @param string   $old_status Old post status.
-	 * @param \WP_Post $post       Post object.
+	 * @param string  $new_status New post status.
+	 * @param string  $old_status Old post status.
+	 * @param WP_Post $post       Post object.
 	 * @return void
 	 */
-	public function invalidate_on_post_change( string $new_status, string $old_status, \WP_Post $post ): void {
+	public function invalidate_on_post_change( string $new_status, string $old_status, WP_Post $post ): void {
 		if ( $new_status === $old_status ) {
 			return;
 		}
@@ -481,11 +484,11 @@ class Dashboard {
 	 *
 	 * @since 0.1.0
 	 *
-	 * @param int         $comment_id The deleted comment ID.
-	 * @param \WP_Comment $comment    The deleted comment object.
+	 * @param int        $comment_id The deleted comment ID.
+	 * @param WP_Comment $comment    The deleted comment object.
 	 * @return void
 	 */
-	public function invalidate_on_rsvp_delete( int $comment_id, \WP_Comment $comment ): void {
+	public function invalidate_on_rsvp_delete( int $comment_id, WP_Comment $comment ): void {
 		if ( Rsvp::COMMENT_TYPE !== $comment->comment_type ) {
 			return;
 		}
@@ -541,10 +544,10 @@ class Dashboard {
 			),
 			$this->make_item(
 				$upcoming_count,
-				/* translators: 1: count, 2: singular post type label, 3: plural post type label */
+				/* translators: %1$s: count, %2$s: singular post type label, %4$s: count , %3$s: plural post type label*/
 				_n(
-					'%1$d Upcoming %2$s',
-					'%1$d Upcoming %3$s',
+					'%1$s Upcoming %2$s',
+					'%4$s Upcoming %3$s',
 					$upcoming_count,
 					'gatherpress-at-a-glance'
 				),
@@ -641,61 +644,6 @@ class Dashboard {
 	}
 
 	// -------------------------------------------------------------------------
-	// Topic item
-	// -------------------------------------------------------------------------
-
-	/**
-	 * Build a term-count glance item for the GatherPress topic taxonomy.
-	 *
-	 * Returns null when the taxonomy is not registered (GatherPress not active
-	 * or core changed the slug).
-	 *
-	 * TODO: Decide on a suitable dashicon for topics and uncomment this method
-	 *       along with its call-site in add_glance_items().
-	 *
-	 * @since 0.1.0
-	 *
-	 * @return string|null HTML string, or null when unavailable.
-	 */
-	/*
-	protected function topic_item(): ?string {
-		$taxonomy = 'gatherpress_topic';
-
-		if ( ! taxonomy_exists( $taxonomy ) ) {
-			return null;
-		}
-
-		$tax_obj = get_taxonomy( $taxonomy );
-		$count   = (int) wp_count_terms( array( 'taxonomy' => $taxonomy, 'hide_empty' => false ) );
-
-		// Topics are managed under the event post type admin screen.
-		$can_manage = $tax_obj && current_user_can( $tax_obj->cap->manage_terms );
-		$url        = $can_manage
-			? admin_url( 'edit-tags.php?taxonomy=' . $taxonomy . '&post_type=gatherpress_event' )
-			: null;
-
-		$singular = $tax_obj ? $tax_obj->labels->singular_name : __( 'Topic', 'gatherpress-at-a-glance' );
-		$plural   = $tax_obj ? $tax_obj->labels->name           : __( 'Topics', 'gatherpress-at-a-glance' );
-
-		return $this->make_item(
-			$count,
-			// translators: 1: count, 2: singular taxonomy label, 3: plural taxonomy label
-			_n(
-				'%1$d %2$s',
-				'%1$d %3$s',
-				$count,
-				'gatherpress-at-a-glance'
-			),
-			$singular,
-			$plural,
-			$url,
-			false,
-			'gp-glance-topic'
-		);
-	}
-	*/
-
-	// -------------------------------------------------------------------------
 	// RSVP items
 	// -------------------------------------------------------------------------
 
@@ -727,8 +675,8 @@ class Dashboard {
 		return array(
 			$this->make_item(
 				$attending,
-				/* translators: 1: count, 2: singular post type label */
 				sprintf(
+					/* translators: 1: count, 2: singular post type label */
 					_n(
 						'%1$d Attending RSVP (%2$s)',
 						'%1$d Attending RSVPs (%2$s)',
@@ -746,8 +694,8 @@ class Dashboard {
 			),
 			$this->make_item(
 				$waiting_list,
-				/* translators: 1: count, 2: singular post type label */
 				sprintf(
+					/* translators: 1: count, 2: singular post type label */
 					_n(
 						'%1$d on Waiting List (%2$s)',
 						'%1$d on Waiting List (%2$s)',
