@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8ef2c7cdab20ac14d46ee83c1f2080fe",
+    "content-hash": "808a65115c5fc5516422fe54e621e377",
     "packages": [],
     "packages-dev": [
         {
@@ -2038,15 +2038,15 @@
         },
         {
             "name": "wpackagist-plugin/gatherpress",
-            "version": "0.35.2",
+            "version": "0.36.0",
             "source": {
                 "type": "svn",
                 "url": "https://plugins.svn.wordpress.org/gatherpress/",
-                "reference": "tags/0.35.2"
+                "reference": "tags/0.36.0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://downloads.wordpress.org/plugin/gatherpress.0.35.2.zip"
+                "url": "https://downloads.wordpress.org/plugin/gatherpress.0.36.0.zip"
             },
             "require": {
                 "composer/installers": "^1.0 || ^2.0"
@@ -2062,5 +2062,5 @@
     "prefer-lowest": false,
     "platform": {},
     "platform-dev": {},
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }
